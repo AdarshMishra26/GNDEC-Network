@@ -723,11 +723,11 @@ def get_default_profile_url():
     return f"https://res.cloudinary.com/{os.getenv('CLOUDINARY_CLOUD_NAME')}/image/upload/v1/defaults/profile_default"
 
 if __name__ == '__main__':
-    # Create necessary directories
-    os.makedirs(os.path.join('static', 'uploads'), exist_ok=True)
-    os.makedirs(os.path.join('static', 'images'), exist_ok=True)
+    # # Create necessary directories
+    # os.makedirs(os.path.join('static', 'uploads'), exist_ok=True)
+    # os.makedirs(os.path.join('static', 'images'), exist_ok=True)
     
     # Migrate posts
     migrate_posts_likes()
     
-    app.run(debug=True, port=8000)
+    app.run(debug=True)
