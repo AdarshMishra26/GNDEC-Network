@@ -8,7 +8,7 @@
             <div class="card shadow-sm">
                 <div class="card-body text-center">
                     <div class="position-relative mb-4">
-                        <img src="{{ url_for('static', filename='uploads/' + user.profile_picture) }}" 
+                        <img src="{{ user.profile_picture }}" 
                              class="rounded-circle border border-4 border-white shadow-sm"
                              style="width: 180px; height: 180px; object-fit: cover;"
                              onerror="handleImageError(this)">

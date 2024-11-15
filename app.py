@@ -14,9 +14,20 @@ from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer
 import random
 import string
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+from cloudinary.utils import cloudinary_url
 
 # Load environment variables
 load_dotenv()
+
+# Configure Cloudinary
+cloudinary.config(
+    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+    api_key=os.getenv('CLOUDINARY_API_KEY'),
+    api_secret=os.getenv('CLOUDINARY_API_SECRET')
+)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
@@ -60,7 +71,7 @@ class User(UserMixin, db.Document):
     name = db.StringField(required=True)
     college = db.StringField()
     course = db.StringField()
-    profile_picture = db.StringField(default='default.jpg')
+    profile_picture = db.StringField(default='https://res.cloudinary.com/your-cloud-name/image/upload/v1/default.jpg')
     bio = db.StringField(max_length=500)
     friends = db.ListField(db.ReferenceField('User'))
     created_at = db.DateTimeField(default=datetime.utcnow)
@@ -123,7 +134,7 @@ class Comment(db.Document):
 # Then define Post
 class Post(db.Document):
     content = db.StringField(required=True)
-    file = db.StringField()  # This will store either image or PDF
+    file = db.StringField()  # This will now store Cloudinary URL
     file_type = db.StringField()  # 'image' or 'pdf'
     timestamp = db.DateTimeField(default=datetime.utcnow)
     user_id = db.ReferenceField(User, required=True)
@@ -133,7 +144,7 @@ class Post(db.Document):
     meta = {
         'collection': 'posts', 
         'ordering': ['-timestamp'],
-        'strict': False  # Allow fields not defined in the model
+        'strict': False
     }
     
     @property
@@ -244,7 +255,8 @@ def verify_otp():
                 new_user = User(
                     email=session['registration_email'],
                     password_hash=session['registration_password'],
-                    name=session['registration_name']
+                    name=session['registration_name'],
+                    profile_picture=get_default_profile_url()  # Set default profile picture
                 )
                 new_user.save()
                 
@@ -272,24 +284,33 @@ def create_post():
     uploaded_file = request.files.get('file')
     
     if content:
-        file_filename = None
+        file_url = None
         file_type = None
         
-        if uploaded_file and allowed_file(uploaded_file.filename):
-            file_filename = secure_filename(uploaded_file.filename)
-            file_extension = file_filename.rsplit('.', 1)[1].lower()
-            
-            # Determine file type
-            if file_extension == 'pdf':
-                file_type = 'pdf'
-            else:
-                file_type = 'image'
+        if uploaded_file and uploaded_file.filename:
+            try:
+                # Upload to Cloudinary
+                upload_result = cloudinary.uploader.upload(
+                    uploaded_file,
+                    folder="posts",
+                    resource_type="auto"
+                )
                 
-            uploaded_file.save(os.path.join(app.config['UPLOAD_FOLDER'], file_filename))
+                file_url = upload_result['secure_url']
+                # Determine file type based on format or resource_type
+                if upload_result['resource_type'] == 'image':
+                    file_type = 'image'
+                elif upload_result['format'] == 'pdf':
+                    file_type = 'pdf'
+                
+            except Exception as e:
+                print(f"Error uploading to Cloudinary: {str(e)}")
+                flash('Error uploading file')
+                return redirect(url_for('index'))
             
         post = Post(
             content=content,
-            file=file_filename,
+            file=file_url,  # Store Cloudinary URL instead of filename
             file_type=file_type,
             user_id=current_user.id
         )
@@ -407,15 +428,21 @@ def settings():
             if 'profile_picture' in request.files:
                 file = request.files['profile_picture']
                 if file and file.filename != '':
-                    print(f"Uploading file: {file.filename}")
-                    filename = f"profile_{current_user.id}_{secure_filename(file.filename)}"
-                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(file_path)
-                    print(f"File saved to: {file_path}")
-                    current_user.profile_picture = filename
-                    print(f"Profile picture updated in database: {filename}")
+                    # Upload to Cloudinary
+                    upload_result = cloudinary.uploader.upload(
+                        file,
+                        folder="profile_pictures",
+                        public_id=f"profile_{current_user.id}",
+                        overwrite=True,
+                        resource_type="auto"
+                    )
+                    
+                    # Store the Cloudinary URL in the database
+                    current_user.profile_picture = upload_result['secure_url']
+                    current_user.save()
+                    flash('Profile picture updated successfully!')
             
-            current_user.save()
+            # Update other user fields...
             return redirect(url_for('settings'))
             
         except Exception as e:
@@ -664,23 +691,20 @@ def reset_password(token):
 def delete_post(post_id):
     post = Post.objects(id=post_id).first_or_404()
     
-    # Check if the current user is the post owner
     if str(post.user_id.id) != str(current_user.id):
         flash('You can only delete your own posts!', 'danger')
         return redirect(url_for('index'))
     
     try:
-        # Delete associated file if exists
+        # Delete file from Cloudinary if exists
         if post.file:
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], post.file)
-            if os.path.exists(file_path):
-                os.remove(file_path)
+            # Extract public_id from the URL
+            public_id = post.file.split('/')[-1].split('.')[0]
+            cloudinary.uploader.destroy(public_id)
         
-        # Delete all comments associated with the post
+        # Delete comments and post
         for comment in post.comments:
             comment.delete()
-        
-        # Delete the post
         post.delete()
         
         flash('Post deleted successfully!', 'success')
@@ -689,6 +713,9 @@ def delete_post(post_id):
         flash('Error deleting post. Please try again.', 'danger')
     
     return redirect(url_for('index'))
+
+def get_default_profile_url():
+    return f"https://res.cloudinary.com/{os.getenv('CLOUDINARY_CLOUD_NAME')}/image/upload/v1/defaults/profile_default"
 
 if __name__ == '__main__':
     # Create necessary directories
