@@ -619,7 +619,12 @@ def edit_post(post_id):
 
 def send_reset_email(user_email):
     token = serializer.dumps(user_email, salt='password-reset-salt')
-    reset_url = url_for('reset_password', token=token, _external=True)
+    
+    # Get domain from environment or default to localhost
+    domain = os.getenv('VERCEL_URL', 'localhost:5000')
+    protocol = 'https' if 'vercel.app' in domain else 'http'
+    
+    reset_url = f"{protocol}://{domain}{url_for('reset_password', token=token)}"
     
     subject = 'Password Reset Request'
     body = f'''Dear User,
@@ -631,7 +636,7 @@ To reset your password, please click on the following link:
 
 This link will expire in 1 hour.
 
-If you did not make this request, please ignore this email and no changes will be made to your account.
+If you did not make this request, please ignore this email.
 
 Best regards,
 GNDEC Connect Team'''
