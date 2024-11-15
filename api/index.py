@@ -1,49 +1,41 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
-from flask_login import (
-    LoginManager, UserMixin, login_user, login_required, 
-    logout_user, current_user, AnonymousUserMixin
-)
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask_login import LoginManager, current_user
 from flask_mongoengine import MongoEngine
+from flask_mail import Mail
 from dotenv import load_dotenv
 import os
-from werkzeug.utils import secure_filename
-from mongoengine import *
-from flask_mail import Mail, Message
-from itsdangerous import URLSafeTimedSerializer
 import cloudinary
 import cloudinary.uploader
-import cloudinary.api
 
 # Load environment variables
 load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__, 
-           template_folder='../templates',  # Point to templates directory
-           static_folder='../static')       # Point to static directory
+           template_folder='../templates',
+           static_folder='../static')
 
-# Configure app settings
+# App configuration
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['MONGODB_SETTINGS'] = {
     'host': os.getenv('MONGODB_URI')
 }
-
-# Configure mail settings
-app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER')
-app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT'))
-app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS') == 'True'
-app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 
 # Initialize extensions
 db = MongoEngine(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Configure mail
+app.config.update(
+    MAIL_SERVER=os.getenv('MAIL_SERVER'),
+    MAIL_PORT=int(os.getenv('MAIL_PORT')),
+    MAIL_USE_TLS=os.getenv('MAIL_USE_TLS') == 'True',
+    MAIL_USERNAME=os.getenv('MAIL_USERNAME'),
+    MAIL_PASSWORD=os.getenv('MAIL_PASSWORD')
+)
 mail = Mail(app)
-serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
 # Configure Cloudinary
 cloudinary.config(
@@ -52,8 +44,21 @@ cloudinary.config(
     api_secret=os.getenv('CLOUDINARY_API_SECRET')
 )
 
-# Import routes after app initialization
-from routes import *
+# Import routes
+from .routes import *
 
-if __name__ == '__main__':
-    app.run() 
+# Main route
+@app.route('/')
+def index():
+    if current_user.is_authenticated:
+        return render_template('index.html')
+    return render_template('landing.html')
+
+# Error handlers
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('404.html'), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return render_template('500.html'), 500 
