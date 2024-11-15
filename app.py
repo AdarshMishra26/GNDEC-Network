@@ -731,3 +731,6 @@ if __name__ == '__main__':
     migrate_posts_likes()
     
     app.run(debug=True)
+
+from app import app # Required for Vercel 
+if __name__ == '__main__': app.run()
