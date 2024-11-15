@@ -9,9 +9,5 @@ itsdangerous==2.1.2
 pymongo==4.6.1
 dnspython==2.4.2
 email-validator==2.1.0.post1
-Pillow==10.1.0
-python-dateutil==2.8.2
-requests==2.31.0
-blinker==1.7.0
 cloudinary==1.36.0
 gunicorn==21.2.0
