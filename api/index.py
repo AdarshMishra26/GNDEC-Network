@@ -45,3 +45,5 @@ from routes import *
 
 # This is the handler Vercel will call
 app = app 
+
+if __name__ == '__main__': app.run()
