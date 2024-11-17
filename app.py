@@ -733,4 +733,4 @@ if __name__ == '__main__':
     app.run(debug=True)
 
 from app import app # Required for Vercel 
-# if __name__ == '__main__': app.run()
+if __name__ == '__main__': app.run()
